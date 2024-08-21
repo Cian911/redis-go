@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
@@ -24,7 +25,19 @@ func main() {
 		os.Exit(1)
 	}
 
-  reply(conn)
+  for {
+    buffer := make([]byte, 64)
+
+    _, err := conn.Read(buffer)
+    if err != nil {
+      fmt.Println("Error accepting connection: ", err.Error())
+      os.Exit(1)
+    }
+
+    if strings.Contains(string(buffer), "PING") {
+      reply(conn)
+    }
+  }
 }
 
 func reply(conn net.Conn) {
