@@ -50,7 +50,7 @@ func (r *Resp) Read() (token, error) {
 	case ARRAY:
 		return r.readArray()
 	case BULK:
-    return r.readBulk()
+		return r.readBulk()
 	default:
 		fmt.Printf("unknown type: %v", string(_type))
 		return token{}, nil
@@ -95,40 +95,40 @@ func (r *Resp) readInteger() (x int, n int, err error) {
 }
 
 func (r *Resp) readArray() (t token, err error) {
-  t.typ = string(ARRAY)
+	t.typ = string(ARRAY)
 
 	size, _, err := r.readInteger()
 	if err != nil {
 		return token{}, nil
 	}
 
-  t.array = make([]token, 0)
-  for i := 0; i < size; i++ {
-    v, err := r.Read()
-    if err != nil {
-      return v, err
-    }
+	t.array = make([]token, 0)
+	for i := 0; i < size; i++ {
+		v, err := r.Read()
+		if err != nil {
+			return v, err
+		}
 
-    t.array = append(t.array, v)
-  }
+		t.array = append(t.array, v)
+	}
 
 	return t, nil
 }
 
 func (r *Resp) readBulk() (t token, err error) {
-  t.typ = string(BULK)
+	t.typ = string(BULK)
 
-  size, _, err := r.readInteger()
-  if err != nil {
+	size, _, err := r.readInteger()
+	if err != nil {
 		return token{}, nil
-  }
-  
-  bulk := make([]byte, size)
-  // Read raw bytes from underlying reader
-  r.reader.Read(bulk)
-  t.bulk = string(bulk)
+	}
 
-  r.readLine()
+	bulk := make([]byte, size)
+	// Read raw bytes from underlying reader
+	r.reader.Read(bulk)
+	t.bulk = string(bulk)
 
-  return t, nil
+	r.readLine()
+
+	return t, nil
 }
