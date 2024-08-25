@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	// Uncomment this block to pass the first stage
 	"net"
 	"os"
 )
@@ -19,27 +17,25 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-  conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+
+		if conn != nil {
+			go process(conn)
+		}
 	}
-
-  for {
-    buffer := make([]byte, 64)
-
-    _, err := conn.Read(buffer)
-    if err != nil {
-      fmt.Println("Error accepting connection: ", err.Error())
-      os.Exit(1)
-    }
-
-    if strings.Contains(string(buffer), "PING") {
-      reply(conn)
-    }
-  }
 }
 
-func reply(conn net.Conn) {
-  conn.Write([]byte("+PONG\r\n"))
+func process(conn net.Conn) {
+	for {
+		buffer := make([]byte, 64)
+
+		conn.Read(buffer)
+		conn.Write([]byte("+PONG\r\n"))
+	}
 }
