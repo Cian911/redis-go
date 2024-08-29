@@ -50,13 +50,16 @@ func (r *Resp) Read() (token, error) {
 	case ARRAY:
 		return r.readArray()
 	case BULK:
-		return r.readBulk()
+    return r.readBulk()
 	default:
 		fmt.Printf("unknown type: %v", string(_type))
 		return token{}, nil
 	}
 }
 
+// readline:
+// Reads each byte of data until it encounters a control character
+// CRCF and then returns
 func (r *Resp) readLine() (line []byte, n int, err error) {
 	for {
 		// Read one byte at a time
@@ -91,5 +94,41 @@ func (r *Resp) readInteger() (x int, n int, err error) {
 	return int(i), l, err
 }
 
-func (r *Resp) readArray() {
+func (r *Resp) readArray() (t token, err error) {
+  t.typ = string(ARRAY)
+
+	size, _, err := r.readInteger()
+	if err != nil {
+		return token{}, nil
+	}
+
+  t.array = make([]token, 0)
+  for i := 0; i < size; i++ {
+    v, err := r.Read()
+    if err != nil {
+      return v, err
+    }
+
+    t.array = append(t.array, v)
+  }
+
+	return t, nil
+}
+
+func (r *Resp) readBulk() (t token, err error) {
+  t.typ = string(BULK)
+
+  size, _, err := r.readInteger()
+  if err != nil {
+		return token{}, nil
+  }
+  
+  bulk := make([]byte, size)
+  // Read raw bytes from underlying reader
+  r.reader.Read(bulk)
+  t.bulk = string(bulk)
+
+  r.readLine()
+
+  return t, nil
 }
