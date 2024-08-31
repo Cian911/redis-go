@@ -51,6 +51,10 @@ func (r *Resp) Read() (token, error) {
 		return r.readArray()
 	case BULK:
 		return r.readBulk()
+	case STRING:
+		return r.readString()
+	case ERROR:
+		return r.readError()
 	default:
 		fmt.Printf("unknown type: %v", string(_type))
 		return token{}, nil
@@ -130,5 +134,29 @@ func (r *Resp) readBulk() (t token, err error) {
 
 	r.readLine()
 
+	return t, nil
+}
+
+func (r *Resp) readString() (t token, err error) {
+	t.typ = string(STRING)
+
+	line, _, err := r.readLine()
+	if err != nil {
+		return token{}, err
+	}
+
+	t.val = string(line)
+	return t, nil
+}
+
+func (r *Resp) readError() (t token, err error) {
+	t.typ = string(ERROR)
+
+	line, _, err := r.readLine()
+	if err != nil {
+		return token{}, err
+	}
+
+	t.val = string(line)
 	return t, nil
 }
