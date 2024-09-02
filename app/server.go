@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -33,9 +34,39 @@ func main() {
 
 func process(conn net.Conn) {
 	for {
-		buffer := make([]byte, 64)
+    resp := NewResp(conn)
+    t, err := resp.Read()
 
-		conn.Read(buffer)
-		conn.Write([]byte("+PONG\r\n"))
+    if err != nil {
+      fmt.Errorf("Failed to read from conn: %v", err)
+      return
+    }
+
+    if t.typ != string(ARRAY) {
+      fmt.Println("Invalid request, expected array")
+      continue
+    }
+
+    if len(t.array) == 0 {
+      fmt.Println("Invalid request, expected array to be > 0")
+      continue
+    }
+
+    command := strings.ToUpper(t.array[0].bulk)
+    args := t.array[1:]
+
+    encoder := NewEncoder(conn)
+    handler, ok := Handlers[command]
+    
+    if !ok {
+      fmt.Println("Invalid command: ", string(command), ok)
+      encoder.Encode(
+        token{typ: string(STRING), val: ""},
+      )
+      continue
+    }
+
+    result := handler(args)
+    encoder.Encode(result)
 	}
 }

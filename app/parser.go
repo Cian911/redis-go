@@ -14,9 +14,6 @@ const (
 	BULK    = '$'
 	INTEGER = ':'
 	ARRAY   = '*'
-
-	// Commands
-	ECHO = "echo"
 )
 
 type token struct {
