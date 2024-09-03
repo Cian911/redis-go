@@ -87,4 +87,35 @@ func TestParseRep(t *testing.T) {
 			t.Errorf("wanted: %v, got: %v", want, resp)
 		}
 	})
+
+	t.Run("Set", func(t *testing.T) {
+		got := "~3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"
+		want := &token{
+			typ: string(SET),
+			array: []token{
+				{
+					typ:  string(BULK),
+					bulk: "SET",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "key",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "value",
+				},
+			},
+		}
+
+		r := NewResp(strings.NewReader(got))
+		resp, err := r.Read()
+		if err != nil {
+			t.Errorf("Failed reading data: %v", err)
+		}
+
+		if !reflect.DeepEqual(want, &resp) {
+			t.Errorf("wanted: %v, got: %v", want, resp)
+		}
+	})
 }

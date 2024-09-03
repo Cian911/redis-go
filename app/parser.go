@@ -14,6 +14,7 @@ const (
 	BULK    = '$'
 	INTEGER = ':'
 	ARRAY   = '*'
+	SET     = '~'
 )
 
 type token struct {
@@ -52,6 +53,8 @@ func (r *Resp) Read() (token, error) {
 		return r.readString()
 	case ERROR:
 		return r.readError()
+	case SET:
+		return r.readSet()
 	default:
 		fmt.Printf("unknown type: %v", string(_type))
 		return token{}, nil
@@ -101,6 +104,27 @@ func (r *Resp) readArray() (t token, err error) {
 	size, _, err := r.readInteger()
 	if err != nil {
 		return token{}, nil
+	}
+
+	t.array = make([]token, 0)
+	for i := 0; i < size; i++ {
+		v, err := r.Read()
+		if err != nil {
+			return v, err
+		}
+
+		t.array = append(t.array, v)
+	}
+
+	return t, nil
+}
+
+func (r *Resp) readSet() (t token, err error) {
+	t.typ = string(SET)
+
+	size, _, err := r.readInteger()
+	if err != nil {
+		return token{}, err
 	}
 
 	t.array = make([]token, 0)

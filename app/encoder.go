@@ -38,6 +38,8 @@ func (t token) Marshal() []byte {
 		return t.marshalBulk()
 	case string(ERROR):
 		return t.marshalError()
+	case string(SET):
+		return t.marshalSet()
 	default:
 		return []byte{}
 	}
@@ -85,6 +87,23 @@ func (t token) marshalBulk() []byte {
 	bytes = append(bytes, '\r', '\n')
 	bytes = append(bytes, t.bulk...)
 	bytes = append(bytes, '\r', '\n')
+
+	return bytes
+}
+
+func (t token) marshalSet() []byte {
+	var bytes []byte
+	bytes = append(bytes, SET)
+	bytes = append(bytes, strconv.Itoa(len(t.array))...)
+	bytes = append(bytes, '\r', '\n')
+
+	for _, v := range t.array {
+		bytes = append(bytes, BULK)
+		bytes = append(bytes, strconv.Itoa(len(v.bulk))...)
+		bytes = append(bytes, '\r', '\n')
+		bytes = append(bytes, v.bulk...)
+		bytes = append(bytes, '\r', '\n')
+	}
 
 	return bytes
 }

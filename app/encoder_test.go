@@ -65,4 +65,34 @@ func TestRespEncoder(t *testing.T) {
 			t.Errorf("got %v, want %v", got, string(want))
 		}
 	})
+
+	t.Run("Encodes Set Resp", func(t *testing.T) {
+		tok := token{
+			typ: string(SET),
+			array: []token{
+				{
+					typ:  string(BULK),
+					bulk: "SET",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "key",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "value",
+				},
+			},
+		}
+		want := []byte("~3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n")
+
+		// new() allocates a new block of memory for the given type
+		got := new(bytes.Buffer)
+		w := NewEncoder(got)
+		w.Encode(tok)
+
+		if !bytes.Equal(want, got.Bytes()) {
+			t.Errorf("got %v, want %v", got, string(want))
+		}
+	})
 }
