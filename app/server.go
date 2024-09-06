@@ -1,17 +1,26 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
 	"strings"
 )
 
+var (
+	DirFlag *string
+	DBFlag  *string
+)
+
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
 
-	// Uncomment this block to pass the first stage
+	// Parse given flags
+	DirFlag = flag.String("dir", "", "Redis DB dir flag")
+	DBFlag = flag.String("dbfilename", "", "Redis DB filename flag")
+	flag.Parse()
 
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
@@ -34,39 +43,38 @@ func main() {
 
 func process(conn net.Conn) {
 	for {
-    resp := NewResp(conn)
-    t, err := resp.Read()
+		resp := NewResp(conn)
+		t, err := resp.Read()
+		if err != nil {
+			fmt.Errorf("Failed to read from conn: %v", err)
+			return
+		}
 
-    if err != nil {
-      fmt.Errorf("Failed to read from conn: %v", err)
-      return
-    }
+		if t.typ != string(ARRAY) {
+			fmt.Println("Invalid request, expected array")
+			continue
+		}
 
-    if t.typ != string(ARRAY) {
-      fmt.Println("Invalid request, expected array")
-      continue
-    }
+		if len(t.array) == 0 {
+			fmt.Println("Invalid request, expected array to be > 0")
+			continue
+		}
 
-    if len(t.array) == 0 {
-      fmt.Println("Invalid request, expected array to be > 0")
-      continue
-    }
+		command := strings.ToUpper(t.array[0].bulk)
+		args := t.array[1:]
 
-    command := strings.ToUpper(t.array[0].bulk)
-    args := t.array[1:]
+		encoder := NewEncoder(conn)
+		handler, ok := Handlers[command]
 
-    encoder := NewEncoder(conn)
-    handler, ok := Handlers[command]
-    
-    if !ok {
-      fmt.Println("Invalid command: ", string(command), ok)
-      encoder.Encode(
-        token{typ: string(STRING), val: ""},
-      )
-      continue
-    }
+		if !ok {
+			fmt.Println("Invalid command: ", string(command), ok)
+			encoder.Encode(
+				token{typ: string(STRING), val: ""},
+			)
+			continue
+		}
 
-    result := handler(args)
-    encoder.Encode(result)
+		result := handler(args)
+		encoder.Encode(result)
 	}
 }

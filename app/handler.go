@@ -8,10 +8,11 @@ import (
 )
 
 var Handlers = map[string]func([]token) token{
-	"PING": ping,
-	"ECHO": echo,
-	"SET":  set,
-	"GET":  get,
+	"PING":   ping,
+	"ECHO":   echo,
+	"SET":    set,
+	"GET":    get,
+	"CONFIG": config,
 }
 
 var (
@@ -103,4 +104,45 @@ func get(args []token) token {
 	}
 
 	return token{typ: string(STRING), val: obj.value}
+}
+
+func config(args []token) token {
+	switch args[0].bulk {
+	case strings.ToUpper("GET"):
+		if args[1].bulk == "dir" {
+			return token{
+				typ: string(ARRAY),
+				array: []token{
+					{
+						typ:  string(BULK),
+						bulk: "dir",
+					},
+					{
+						typ:  string(BULK),
+						bulk: *DirFlag,
+					},
+				},
+			}
+		} else if args[1].bulk == "dbfilename" {
+			return token{
+				typ: string(ARRAY),
+				array: []token{
+					{
+						typ:  string(BULK),
+						bulk: "dbfilename",
+					},
+					{
+						typ:  string(BULK),
+						bulk: *DBFlag,
+					},
+				},
+			}
+		}
+	case strings.ToUpper("SET"):
+		return token{}
+	default:
+		return token{}
+	}
+
+	return token{}
 }
