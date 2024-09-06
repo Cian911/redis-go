@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,27 +51,7 @@ func set(args []token) token {
 
 	// Check if we need to set expiry
 	if len(args) >= 4 && strings.ToUpper(args[2].bulk) == "PX" {
-		fmt.Printf("%v\n", args[3].num)
-		exp, err := strconv.Atoi(args[3].val)
-		if err != nil {
-			return token{typ: string(ERROR), val: "Could not convert expiry time"}
-		}
-		panic("here")
-
-		// Proceed with setting the expiry
-		mux.Lock()
-		datastore[args[0].bulk] = object{
-			value:     args[1].bulk,
-			createdAt: time.Now().UTC(),
-		}
-		mux.Unlock()
-
-		time.AfterFunc(time.Duration(exp)*time.Millisecond, func() {
-			// Delete the key after it's expired
-			mux.Lock()
-			delete(datastore, args[0].bulk)
-			mux.Unlock()
-		})
+		setWithExpiry(args)
 	} else {
 		// Create lock to avoid race-conditions
 		mux.Lock()
@@ -82,6 +61,30 @@ func set(args []token) token {
 		}
 		mux.Unlock()
 	}
+
+	return token{typ: string(STRING), val: "OK"}
+}
+
+func setWithExpiry(args []token) token {
+	exp, err := strconv.Atoi(args[3].bulk)
+	if err != nil {
+		return token{typ: string(ERROR), val: err.Error()}
+	}
+
+	// Proceed with setting the expiry
+	mux.Lock()
+	datastore[args[0].bulk] = object{
+		value:     args[1].bulk,
+		createdAt: time.Now().UTC(),
+	}
+	mux.Unlock()
+
+	time.AfterFunc(time.Duration(exp)*time.Millisecond, func() {
+		// Delete the key after it's expired
+		mux.Lock()
+		delete(datastore, args[0].bulk)
+		mux.Unlock()
+	})
 
 	return token{typ: string(STRING), val: "OK"}
 }
@@ -96,7 +99,7 @@ func get(args []token) token {
 	mux.RUnlock()
 
 	if obj.value == "" {
-		return token{typ: string(ERROR)}
+		return token{typ: string(NULL), val: "1"}
 	}
 
 	return token{typ: string(STRING), val: obj.value}

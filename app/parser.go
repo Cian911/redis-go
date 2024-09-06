@@ -15,6 +15,7 @@ const (
 	INTEGER = ':'
 	ARRAY   = '*'
 	SET     = '~'
+	NULL    = '_'
 )
 
 type token struct {

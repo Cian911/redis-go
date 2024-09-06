@@ -40,6 +40,8 @@ func (t token) Marshal() []byte {
 		return t.marshalError()
 	case string(SET):
 		return t.marshalSet()
+	case string(NULL):
+		return t.marshalNull()
 	default:
 		return []byte{}
 	}
@@ -89,6 +91,10 @@ func (t token) marshalBulk() []byte {
 	bytes = append(bytes, '\r', '\n')
 
 	return bytes
+}
+
+func (t token) marshalNull() []byte {
+	return []byte("$-1\r\n")
 }
 
 func (t token) marshalSet() []byte {
