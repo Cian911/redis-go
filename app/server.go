@@ -22,6 +22,17 @@ func main() {
 	DBFlag = flag.String("dbfilename", "", "Redis DB filename flag")
 	flag.Parse()
 
+	// Read RDB file if one is given
+	if len(*DirFlag) != 0 && len(*DBFlag) != 0 {
+		r := InitRDB(
+			fmt.Sprintf("%s/%s", *DirFlag, *DBFlag),
+		)
+		if r.fileExists {
+			// Seed datastore
+			r.ReadRDB()
+		}
+	}
+
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")

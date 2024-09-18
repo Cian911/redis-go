@@ -13,6 +13,7 @@ var Handlers = map[string]func([]token) token{
 	"SET":    set,
 	"GET":    get,
 	"CONFIG": config,
+	"KEYS":   keys,
 }
 
 var (
@@ -76,6 +77,7 @@ func setWithExpiry(args []token) token {
 	mux.Lock()
 	datastore[args[0].bulk] = object{
 		value:     args[1].bulk,
+		expiry:    int(time.Duration(exp) * time.Millisecond),
 		createdAt: time.Now().UTC(),
 	}
 	mux.Unlock()
@@ -145,4 +147,30 @@ func config(args []token) token {
 	}
 
 	return token{}
+}
+
+func keys(args []token) token {
+	switch args[0].bulk {
+	case "*":
+		allKeys := make([]token, 0, len(datastore))
+		mux.Lock()
+
+		for k := range datastore {
+			allKeys = append(
+				allKeys,
+				token{
+					typ:  string(BULK),
+					bulk: string(k),
+				},
+			)
+		}
+
+		mux.Unlock()
+		return token{
+			typ:   string(ARRAY),
+			array: allKeys,
+		}
+	default:
+		return token{}
+	}
 }
