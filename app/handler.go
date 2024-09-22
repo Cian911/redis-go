@@ -205,7 +205,7 @@ func info(args []token) token {
 	case "REPLICATION":
 		return token{
 			typ: string(STRING),
-			val: "role:master",
+			val: fmt.Sprintf("role:%s", Role),
 		}
 	default:
 		return token{}

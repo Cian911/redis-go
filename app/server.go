@@ -9,9 +9,11 @@ import (
 )
 
 var (
-	DirFlag  *string
-	DBFlag   *string
-	PortFlag *string
+	DirFlag       *string
+	DBFlag        *string
+	PortFlag      *string
+	ReplicaOFflag *string
+	Role          string
 )
 
 func main() {
@@ -22,11 +24,19 @@ func main() {
 	DirFlag = flag.String("dir", "", "Redis DB dir flag")
 	DBFlag = flag.String("dbfilename", "", "Redis DB filename flag")
 	PortFlag = flag.String("port", "", "Custom port for redis server")
+	ReplicaOFflag = flag.String("replicaof", "", "Start server in replica mode")
 	flag.Parse()
 
 	// Check if custom port has been asked for
 	if len(*PortFlag) == 0 {
 		*PortFlag = "6379"
+	}
+
+	// Check if slave has been asked for
+	if len(*ReplicaOFflag) == 0 {
+		Role = "master"
+	} else {
+		Role = "slave"
 	}
 
 	// Read RDB file if one is given
