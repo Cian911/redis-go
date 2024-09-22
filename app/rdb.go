@@ -5,19 +5,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
 )
 
 var expiryTime time.Time
-
-// TODO:
-// Create RDB file
-// Parse RDB file
-// Incorporate all keys in RDB into in-memory datastore
-// Implements KEYS *
-// Implement SAVE to persist data to RDB file
 
 const (
 	DB_SECTION_OFFSET = 0xFE
@@ -29,14 +23,6 @@ type rdb struct {
 	file       os.File
 	fileExists bool
 }
-
-// type keys struct {
-// 	hshTableSize int
-// 	valueType    int
-// 	keySize      int
-// 	key          string
-// 	value        string
-// }
 
 // Given a path, create RDB file
 func InitRDB(path string) rdb {
@@ -65,99 +51,129 @@ func (r *rdb) ReadRDB() error {
 	// If first two bits are 10, the size is stored in the next 4 bytes. This is used for larger values
 	// If first two bits are 11, the remaining 6 bits specify a type of string encoding, and not a size
 
-	header, _ := r.reader.ReadBytes(0xFA)
+	// header, _ := r.reader.ReadBytes(0xFA)
+	// fmt.Println("Header: ", string(header))
+	//
+	// metadata, _ := r.reader.ReadBytes(0xFB)
+	// fmt.Println("Metadata: ", string(metadata))
+	//
+	// size, _ := r.reader.ReadByte()
+	// fmt.Println("Hash Size: ", size)
+	//
+	// _, _ = r.reader.ReadByte()
+	// _, _ = r.reader.ReadByte()
+
+	header := make([]byte, 9)
+	r.reader.Read(header)
 	fmt.Println(string(header))
 
-	metadata, _ := r.reader.ReadBytes(0xFB)
-	fmt.Println(string(metadata))
+	if string(header[:5]) != "REDIS" {
+		return fmt.Errorf("Invalid RDB file format")
+	}
 
-	size, _ := r.reader.ReadByte()
-	fmt.Println("Szie: ", size)
+	// Skip to DB selector
+	if _, err := r.reader.ReadBytes(0xFE); err != nil {
+		return err
+	}
 
-	_, _ = r.reader.ReadByte()
+	if b, err := r.reader.ReadByte(); err != nil {
+		return err
+	} else {
+		fmt.Println("Index: ", b)
+	}
 
-	for range size {
-		dataType, _ := r.reader.ReadByte()
-		fmt.Println("dataType: ", dataType)
-		if dataType == 0 {
-			keySize, err := r.decodeSize()
+	// Skip hash table size info
+	if _, err := r.reader.ReadBytes(0xFB); err != nil {
+		return err
+	}
+	if _, err := r.decodeSize(); err != nil {
+		return err
+	}
+	if _, err := r.decodeSize(); err != nil {
+		return err
+	}
+
+	// Read k/v pair
+	for {
+		b, err := r.reader.ReadByte()
+		if err == io.EOF {
+			fmt.Println("End of File")
+			break
+		}
+
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		if b == 0xFF {
+			fmt.Println("End of RDB File")
+			// End of File, break
+			break
+		}
+
+		var expiry time.Time
+
+		if b == 0xFC {
+			// "expiry time in ms", followed by 8 byte unsigned long
+			milli := make([]byte, 8)
+			r.reader.Read(milli)
+			exp := binary.LittleEndian.Uint64(milli)
+			expiry = time.UnixMilli(int64(exp))
+			// Read next byte
+			b, err = r.reader.ReadByte()
 			if err != nil {
 				return err
 			}
-			keyBuf := make([]byte, keySize)
-			r.reader.Read(keyBuf)
-			valSize, err := r.decodeSize()
-			valBuf := make([]byte, valSize)
-			r.reader.Read(valBuf)
-			fmt.Println(string(keyBuf), ":", string(valBuf))
+		}
 
-			exp, _ := r.reader.ReadByte()
+		if b != 0 {
+			return fmt.Errorf("Unsupported value type: %d", b)
+		}
 
-			// Check if key has expiry, in seconds
-			if exp == 0xFD {
-				// 4 byte unsigned int
-				b := make([]byte, 4)
-				r.reader.Read(b)
-				// Each byte in b holds a part of the number, and the code shifts these bytes into their correct positions to reconstruct the original integer.
-				i := int64(binary.LittleEndian.Uint64(b))
-				expiryTime = time.Unix(i, 0)
-				set([]token{
-					{
-						typ:  string(BULK),
-						bulk: string(keyBuf),
-					},
-					{
-						typ:  string(BULK),
-						bulk: string(valBuf),
-					},
-					{
-						typ:  string(BULK),
-						bulk: "PX",
-					},
-					{
-						typ:  string(BULK),
-						bulk: fmt.Sprintf("%d", expiryTime),
-					},
-				})
-			} else if exp == 0xFC {
-				// "expiry time in ms", followed by 8 byte unsigned long
-				b := make([]byte, 8)
-				r.reader.Read(b)
-				i := int64(binary.LittleEndian.Uint64(b))
-				expiryTime = time.Unix(i/1000, i%1000*1000)
-				set([]token{
-					{
-						typ:  string(BULK),
-						bulk: string(keyBuf),
-					},
-					{
-						typ:  string(BULK),
-						bulk: string(valBuf),
-					},
-					{
-						typ:  string(BULK),
-						bulk: "PX",
-					},
-					{
-						typ:  string(BULK),
-						bulk: fmt.Sprintf("%d", expiryTime),
-					},
-				})
-			} else {
-				set([]token{
-					{
-						typ:  string(BULK),
-						bulk: string(keyBuf),
-					},
-					{
-						typ:  string(BULK),
-						bulk: string(valBuf),
-					},
-				})
-				// If not, un-read last byte
-				r.reader.UnreadByte()
+		keySize, err := r.decodeSize()
+		fmt.Println(keySize)
+		if err != nil {
+			return err
+		}
+		keyBuf := make([]byte, keySize)
+		r.reader.Read(keyBuf)
+		valSize, err := r.decodeSize()
+		valBuf := make([]byte, valSize)
+		r.reader.Read(valBuf)
+		fmt.Println("KeyVal Pair: ", string(keyBuf), ":", string(valBuf))
 
-			}
+		if !expiry.IsZero() {
+			fmt.Println("Set with Expiry: ", expiry)
+			setWithExpiry([]token{
+				{
+					typ:  string(BULK),
+					bulk: string(keyBuf),
+				},
+				{
+					typ:  string(BULK),
+					bulk: string(valBuf),
+				},
+				{
+					typ:  string(BULK),
+					bulk: "PXAT",
+				},
+				{
+					typ:  string(BULK),
+					bulk: fmt.Sprintf("%d", expiry.UnixMilli()),
+				},
+			})
+		} else {
+			set([]token{
+				{
+					typ:  string(BULK),
+					bulk: string(keyBuf),
+				},
+				{
+					typ:  string(BULK),
+					bulk: string(valBuf),
+				},
+			})
 		}
 	}
 
@@ -188,19 +204,11 @@ func (r *rdb) decodeSize() (int, error) {
 		size := int(b&0x3F)<<8 | int(nextByte)
 		return size, nil
 	case 2:
-		// Size is in the next 4 bytes
-		var size int
-
-		for i := 0; i < 4; i++ {
-			nextByte, err := r.reader.ReadByte()
-			if err != nil {
-				return 0, err
-			}
-			// Shift size by 8 bits and append next byte
-			size = (size << 8) | int(nextByte)
+		next := make([]byte, 4)
+		if _, err := io.ReadFull(&r.reader, next); err != nil {
+			return 0, err
 		}
-
-		return size, nil
+		return int(binary.BigEndian.Uint32(next)), nil
 	default:
 		return 0, errors.New("unexpected string encoding type")
 	}

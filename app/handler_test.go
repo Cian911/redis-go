@@ -112,6 +112,52 @@ func TestHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("setWithExpiry", func(t *testing.T) {
+		want := token{
+			typ: string(STRING),
+			val: "OK",
+		}
+
+		tok := token{
+			array: []token{
+				{
+					typ:  string(BULK),
+					bulk: "SET",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "apple",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "orange",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "PX",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "100",
+				},
+			},
+		}
+
+		command := strings.ToUpper(tok.array[0].bulk)
+		args := tok.array[1:]
+
+		handler, ok := Handlers[command]
+		if !ok {
+			t.Errorf("Could not get handler. wanted %s, got %s", "echo", command)
+		}
+
+		result := handler(args)
+
+		if !reflect.DeepEqual(result, want) {
+			t.Errorf("Failed set. wanted %v, got %v", result, want)
+		}
+	})
+
 	t.Run("get", func(t *testing.T) {
 		want := token{
 			typ: string(STRING),

@@ -29,8 +29,11 @@ func main() {
 		)
 		if r.fileExists {
 			// Seed datastore
-			r.ReadRDB()
+			err := r.ReadRDB()
+			fmt.Println(err)
 		}
+
+		defer r.file.Close()
 	}
 
 	l, err := net.Listen("tcp", "0.0.0.0:6379")

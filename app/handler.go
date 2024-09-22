@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,6 +58,7 @@ func set(args []token) token {
 	} else {
 		// Create lock to avoid race-conditions
 		mux.Lock()
+		fmt.Printf("Setting Key: %s - %s\n", args[0].bulk, args[1].bulk)
 		datastore[args[0].bulk] = object{
 			value:     args[1].bulk,
 			createdAt: time.Now().UTC(),
@@ -68,22 +70,44 @@ func set(args []token) token {
 }
 
 func setWithExpiry(args []token) token {
-	exp, err := strconv.Atoi(args[3].bulk)
+	// Assuming args[2].bulk indicates the type of expiry, e.g., "PX" for duration or "PXAT" for absolute timestamp
+	fmt.Println("Setting key with expiry")
+	expiryType := args[2].bulk
+	expValue := args[3].bulk
+
+	exp, err := strconv.ParseInt(expValue, 10, 64)
 	if err != nil {
-		return token{typ: string(ERROR), val: err.Error()}
+		return token{typ: string(ERROR), val: "Invalid expiration value"}
 	}
 
-	// Proceed with setting the expiry
+	var expiryTime time.Time
+	switch strings.ToUpper(expiryType) {
+	case "PX": // Duration in milliseconds
+		expiryTime = time.Now().Add(time.Duration(exp) * time.Millisecond)
+	case "PXAT": // Absolute timestamp in milliseconds
+		expiryTime = time.UnixMilli(exp)
+	default:
+		return token{typ: string(ERROR), val: "Invalid expiry type. Use PX or PXAT."}
+	}
+
+	durationUntilExpiry := time.Until(expiryTime)
+
+	if durationUntilExpiry <= 0 {
+		// Expiration time is in the past
+		return token{typ: string(ERROR), val: "Expiration time is in the past"}
+	}
+
+	// Store the key with expiration information
 	mux.Lock()
 	datastore[args[0].bulk] = object{
 		value:     args[1].bulk,
-		expiry:    int(time.Duration(exp) * time.Millisecond),
+		expiry:    int(expiryTime.UnixMilli()),
 		createdAt: time.Now().UTC(),
 	}
 	mux.Unlock()
 
-	time.AfterFunc(time.Duration(exp)*time.Millisecond, func() {
-		// Delete the key after it's expired
+	// Set up a timer to delete the key after the specified duration
+	time.AfterFunc(durationUntilExpiry, func() {
 		mux.Lock()
 		delete(datastore, args[0].bulk)
 		mux.Unlock()
