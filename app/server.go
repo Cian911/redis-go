@@ -53,11 +53,18 @@ func main() {
 		defer r.file.Close()
 	}
 
+	// Send Handshake to master if asked for
+	if Role == "slave" {
+		NewHandshake(ReplicaOFflag)
+	}
+
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
 	if err != nil {
 		fmt.Printf("Failed to bind to port %s\n", *PortFlag)
 		os.Exit(1)
 	}
+
+	fmt.Printf("Listening on addr: %v as %s\n", l.Addr(), Role)
 
 	for {
 		conn, err := l.Accept()
@@ -82,7 +89,7 @@ func process(conn net.Conn) {
 		}
 
 		if t.typ != string(ARRAY) {
-			fmt.Println("Invalid request, expected array")
+			fmt.Printf("Invalid request, expected array, got: %v\n", t)
 			continue
 		}
 
