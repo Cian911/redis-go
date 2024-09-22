@@ -15,6 +15,7 @@ var Handlers = map[string]func([]token) token{
 	"GET":    get,
 	"CONFIG": config,
 	"KEYS":   keys,
+	"INFO":   info,
 }
 
 var (
@@ -193,6 +194,18 @@ func keys(args []token) token {
 		return token{
 			typ:   string(ARRAY),
 			array: allKeys,
+		}
+	default:
+		return token{}
+	}
+}
+
+func info(args []token) token {
+	switch strings.ToUpper(args[0].bulk) {
+	case "REPLICATION":
+		return token{
+			typ: string(STRING),
+			val: "role:master",
 		}
 	default:
 		return token{}
