@@ -7,11 +7,13 @@ import (
 
 type Encoder struct {
 	writer io.Writer
+	reader io.ReadCloser
 }
 
-func NewEncoder(en io.Writer) *Encoder {
+func NewEncoder(en io.Writer, rd io.ReadCloser) *Encoder {
 	return &Encoder{
 		writer: en,
+		reader: rd,
 	}
 }
 
@@ -24,6 +26,17 @@ func (e *Encoder) Encode(t token) error {
 	}
 
 	return nil
+}
+
+func (e *Encoder) Decode() ([]byte, error) {
+	buf := make([]byte, 6)
+
+	n, err := io.ReadFull(e.reader, buf)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return buf[:n], nil
 }
 
 func (t token) Marshal() []byte {

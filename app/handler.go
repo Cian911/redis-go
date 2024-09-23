@@ -9,13 +9,14 @@ import (
 )
 
 var Handlers = map[string]func([]token) token{
-	"PING":   ping,
-	"ECHO":   echo,
-	"SET":    set,
-	"GET":    get,
-	"CONFIG": config,
-	"KEYS":   keys,
-	"INFO":   info,
+	"PING":     ping,
+	"ECHO":     echo,
+	"SET":      set,
+	"GET":      get,
+	"CONFIG":   config,
+	"KEYS":     keys,
+	"INFO":     info,
+	"REPLCONF": replconf,
 }
 
 var (
@@ -212,6 +213,21 @@ func info(args []token) token {
 				0,
 			),
 		}
+	default:
+		return token{}
+	}
+}
+
+func replconf(args []token) token {
+	if len(args) < 2 {
+		return token{typ: string(ERROR), val: "REPLCONF should have more than 1 argument."}
+	}
+
+	switch strings.ToUpper(args[0].bulk) {
+	case "listening-port":
+		return token{typ: string(STRING), val: "OK"}
+	case "capa":
+		return token{typ: string(STRING), val: "OK"}
 	default:
 		return token{}
 	}

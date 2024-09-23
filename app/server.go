@@ -55,7 +55,7 @@ func main() {
 
 	// Send Handshake to master if asked for
 	if Role == "slave" {
-		NewHandshake(ReplicaOFflag)
+		NewHandshake(ReplicaOFflag, PortFlag)
 	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
@@ -101,7 +101,7 @@ func process(conn net.Conn) {
 		command := strings.ToUpper(t.array[0].bulk)
 		args := t.array[1:]
 
-		encoder := NewEncoder(conn)
+		encoder := NewEncoder(conn, conn)
 		handler, ok := Handlers[command]
 
 		if !ok {
