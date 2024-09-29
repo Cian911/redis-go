@@ -17,6 +17,7 @@ var Handlers = map[string]func([]token) token{
 	"KEYS":     keys,
 	"INFO":     info,
 	"REPLCONF": replconf,
+	"PSYNC":    psync,
 }
 
 var (
@@ -231,4 +232,12 @@ func replconf(args []token) token {
 	default:
 		return token{}
 	}
+}
+
+func psync(args []token) token {
+	if len(args) != 2 {
+		return token{typ: string(ERROR), val: "PSYNC must have two arguments"}
+	}
+
+	return token{typ: string(STRING), val: "FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0"}
 }

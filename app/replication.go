@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 )
 
 func NewHandshake(replicaof *string, replicaPort *string) error {
@@ -20,6 +21,7 @@ func NewHandshake(replicaof *string, replicaPort *string) error {
 	pingHandshake(conn)
 	replconfHandshakeOne(conn, *replicaPort)
 	replconfHandshakeTwo(conn)
+	psyncHandshake(conn)
 
 	return nil
 }
@@ -90,6 +92,48 @@ func replconfHandshakeTwo(conn net.Conn) error {
 	}
 	e := NewEncoder(conn, conn)
 	e.Encode(tok)
+	// Wait small amount of time before returning
+	// to allow master to send response
+	time.Sleep(time.Millisecond * 300)
+
+	_, err := e.Decode()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	return nil
+}
+
+func psyncHandshake(conn net.Conn) error {
+	tok := token{
+		typ: string(ARRAY),
+		array: []token{
+			{
+				typ:  string(BULK),
+				bulk: "PSYNC",
+			},
+			{
+				typ:  string(BULK),
+				bulk: "?",
+			},
+			{
+				typ:  string(BULK),
+				bulk: "-1",
+			},
+		},
+	}
+	e := NewEncoder(conn, conn)
+	err := e.Encode(tok)
+	if err != nil {
+		return err
+	}
+
+	// _, err = e.Decode()
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return err
+	// }
 
 	return nil
 }
