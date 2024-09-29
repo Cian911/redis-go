@@ -224,7 +224,7 @@ func replconf(args []token) token {
 		return token{typ: string(ERROR), val: "REPLCONF should have more than 1 argument."}
 	}
 
-	switch strings.ToUpper(args[0].bulk) {
+	switch strings.ToLower(args[0].bulk) {
 	case "listening-port":
 		return token{typ: string(STRING), val: "OK"}
 	case "capa":
