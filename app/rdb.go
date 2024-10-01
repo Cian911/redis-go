@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -43,6 +44,21 @@ func InitRDB(path string) rdb {
 	}
 
 	return r
+}
+
+// LoadRDB takes a path to an RDB file
+// and returns the contents, it's length, and any error
+func LoadRDB(path string) ([]byte, int, error) {
+	// RDB filem is hex encoded
+	fd, err := hex.DecodeString(
+		"524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2",
+	)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return fd, len(fd), nil
 }
 
 func (r *rdb) ReadRDB() error {
@@ -213,5 +229,3 @@ func (r *rdb) decodeSize() (int, error) {
 		return 0, errors.New("unexpected string encoding type")
 	}
 }
-
-func (r *rdb) LoadDB() {}

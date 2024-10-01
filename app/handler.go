@@ -241,3 +241,25 @@ func psync(args []token) token {
 
 	return token{typ: string(STRING), val: "FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0"}
 }
+
+func psyncWithRDB() token {
+	file, l, err := LoadRDB("./test_data/empty.rdb")
+	if err != nil {
+		fmt.Println(err)
+		return token{typ: string(ERROR), val: fmt.Sprintf("%v", err)}
+	}
+
+	return token{
+		typ: string(SYNC),
+		array: []token{
+			{
+				typ:  string(BULK),
+				bulk: fmt.Sprintf("%d", l),
+			},
+			{
+				typ:  string(BULK),
+				bulk: string(file),
+			},
+		},
+	}
+}

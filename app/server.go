@@ -114,5 +114,13 @@ func process(conn net.Conn) {
 
 		result := handler(args)
 		encoder.Encode(result)
+
+		switch result.typ {
+		case string(STRING):
+			if strings.Contains(result.val, "FULLRESYNC") {
+				token := psyncWithRDB()
+				encoder.Encode(token)
+			}
+		}
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"strconv"
 )
@@ -40,6 +41,7 @@ func (e *Encoder) Decode() ([]byte, error) {
 }
 
 func (t token) Marshal() []byte {
+	fmt.Println(t)
 	switch t.typ {
 	case string(ARRAY):
 		return t.marshalArray()
@@ -55,6 +57,8 @@ func (t token) Marshal() []byte {
 		return t.marshalSet()
 	case string(NULL):
 		return t.marshalNull()
+	case string(SYNC):
+		return t.marshalPsync()
 	default:
 		return []byte{}
 	}
@@ -123,6 +127,16 @@ func (t token) marshalSet() []byte {
 		bytes = append(bytes, v.bulk...)
 		bytes = append(bytes, '\r', '\n')
 	}
+
+	return bytes
+}
+
+func (t token) marshalPsync() []byte {
+	var bytes []byte
+	bytes = append(bytes, '$')
+	bytes = append(bytes, t.array[0].bulk...)
+	bytes = append(bytes, '\r', '\n')
+	bytes = append(bytes, t.array[1].bulk...)
 
 	return bytes
 }

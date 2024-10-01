@@ -129,12 +129,6 @@ func psyncHandshake(conn net.Conn) error {
 		return err
 	}
 
-	// _, err = e.Decode()
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return err
-	// }
-
 	return nil
 }
 

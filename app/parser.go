@@ -16,6 +16,7 @@ const (
 	ARRAY   = '*'
 	SET     = '~'
 	NULL    = '_'
+	SYNC    = '?'
 )
 
 type token struct {
