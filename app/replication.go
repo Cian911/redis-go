@@ -8,10 +8,12 @@ import (
 	"time"
 )
 
-func NewHandshake(replicaof *string, replicaPort *string) error {
+var replicaPropagationBuffer []token
+
+func NewHandshake(replicaof *string, replicaPort *string) (net.Conn, error) {
 	server, port, err := getMasterAddr(replicaof)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	conn, err := connect(server, port)
 	if err != nil {
@@ -23,7 +25,12 @@ func NewHandshake(replicaof *string, replicaPort *string) error {
 	replconfHandshakeTwo(conn)
 	psyncHandshake(conn)
 
-	return nil
+	return conn, nil
+}
+
+func PropagateToReplica(conn net.Conn, tok token) {
+	e := NewEncoder(conn, conn)
+	e.Encode(tok)
 }
 
 func pingHandshake(conn net.Conn) error {

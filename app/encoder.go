@@ -47,8 +47,6 @@ func (t token) Marshal() []byte {
 		return t.marshalArray()
 	case string(STRING):
 		return t.marshalString()
-	case string(INTEGER):
-		return t.marshalInteger()
 	case string(BULK):
 		return t.marshalBulk()
 	case string(ERROR):
@@ -139,8 +137,4 @@ func (t token) marshalPsync() []byte {
 	bytes = append(bytes, t.array[1].bulk...)
 
 	return bytes
-}
-
-func (t token) marshalInteger() []byte {
-	return []byte{}
 }

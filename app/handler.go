@@ -61,7 +61,6 @@ func set(args []token) token {
 	} else {
 		// Create lock to avoid race-conditions
 		mux.Lock()
-		fmt.Printf("Setting Key: %s - %s\n", args[0].bulk, args[1].bulk)
 		datastore[args[0].bulk] = object{
 			value:     args[1].bulk,
 			createdAt: time.Now().UTC(),

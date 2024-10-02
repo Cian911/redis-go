@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -15,6 +16,8 @@ var (
 	ReplicaOFflag *string
 	Role          string
 )
+
+var replicas []net.Conn
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -55,7 +58,11 @@ func main() {
 
 	// Send Handshake to master if asked for
 	if Role == "slave" {
-		NewHandshake(ReplicaOFflag, PortFlag)
+		_, err := NewHandshake(ReplicaOFflag, PortFlag)
+		if err != nil {
+			log.Fatalf("Failed to connect to replica: %v", err)
+		}
+		// replicas = append(replicas, conn)
 	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
@@ -115,6 +122,8 @@ func process(conn net.Conn) {
 		result := handler(args)
 		encoder.Encode(result)
 
+		// This feels very ugly
+		// TODO: Make this better
 		switch result.typ {
 		case string(STRING):
 			if strings.Contains(result.val, "FULLRESYNC") {
@@ -122,5 +131,30 @@ func process(conn net.Conn) {
 				encoder.Encode(token)
 			}
 		}
+
+		// Add to replication buffer
+		switch command {
+		case "SET":
+			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
+		case "DEL":
+			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
+		case "PSYNC":
+			replicas = append(replicas, conn)
+		}
+		go propagate()
+	}
+}
+
+func propagate() {
+	for _, conn := range replicas {
+		if len(replicaPropagationBuffer) == 0 {
+			break
+		}
+
+		for _, t := range replicaPropagationBuffer {
+			PropagateToReplica(conn, t)
+		}
+
+		replicaPropagationBuffer = []token{}
 	}
 }
