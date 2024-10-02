@@ -136,12 +136,15 @@ func process(conn net.Conn) {
 		switch command {
 		case "SET":
 			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
+			propagate()
+			replicaPropagationBuffer = []token{}
 		case "DEL":
 			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
+			propagate()
+			replicaPropagationBuffer = []token{}
 		case "PSYNC":
 			replicas = append(replicas, conn)
 		}
-		go propagate()
 	}
 }
 
@@ -154,7 +157,5 @@ func propagate() {
 		for _, t := range replicaPropagationBuffer {
 			PropagateToReplica(conn, t)
 		}
-
-		replicaPropagationBuffer = []token{}
 	}
 }
