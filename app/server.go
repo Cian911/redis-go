@@ -62,7 +62,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to connect to replica: %v", err)
 		}
-		// replicas = append(replicas, conn)
 	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
@@ -83,6 +82,8 @@ func main() {
 		if conn != nil {
 			go process(conn)
 		}
+
+		defer conn.Close()
 	}
 }
 
@@ -129,12 +130,19 @@ func process(conn net.Conn) {
 			if strings.Contains(result.val, "FULLRESYNC") {
 				token := psyncWithRDB()
 				encoder.Encode(token)
+
+				c, err := net.Dial("tcp", "localhost:6380")
+				if err != nil {
+					fmt.Println(err)
+				}
+				replicas = append(replicas, c)
 			}
 		}
 
 		// Add to replication buffer
 		switch command {
 		case "SET":
+			fmt.Println("Setting")
 			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
 			propagate()
 			replicaPropagationBuffer = []token{}
@@ -142,8 +150,13 @@ func process(conn net.Conn) {
 			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
 			propagate()
 			replicaPropagationBuffer = []token{}
-		case "PSYNC":
-			replicas = append(replicas, conn)
+		case "REPLCONF":
+			log.Fatal("REPLCONF")
+			// c, err := net.Dial("tcp", "localhost:6380")
+			// if err != nil {
+			// 	fmt.Println(err)
+			// }
+			// replicas = append(replicas, c)
 		}
 	}
 }

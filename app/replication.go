@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -10,6 +9,8 @@ import (
 
 var replicaPropagationBuffer []token
 
+// NewHandshake connects to master server
+// and performs handshake
 func NewHandshake(replicaof *string, replicaPort *string) (net.Conn, error) {
 	server, port, err := getMasterAddr(replicaof)
 	if err != nil {
@@ -17,18 +18,22 @@ func NewHandshake(replicaof *string, replicaPort *string) (net.Conn, error) {
 	}
 	conn, err := connect(server, port)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	pingHandshake(conn)
 	replconfHandshakeOne(conn, *replicaPort)
 	replconfHandshakeTwo(conn)
 	psyncHandshake(conn)
+	time.Sleep(time.Second * 2)
+
+	go process(conn)
 
 	return conn, nil
 }
 
 func PropagateToReplica(conn net.Conn, tok token) {
+	fmt.Println("Sending token to replica: ", tok, conn.LocalAddr().String())
 	e := NewEncoder(conn, conn)
 	e.Encode(tok)
 }
