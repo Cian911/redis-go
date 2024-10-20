@@ -56,14 +56,6 @@ func main() {
 		defer r.file.Close()
 	}
 
-	// Send Handshake to master if asked for
-	if Role == "slave" {
-		_, err := NewHandshake(ReplicaOFflag, PortFlag)
-		if err != nil {
-			log.Fatalf("Failed to connect to replica: %v", err)
-		}
-	}
-
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
 	if err != nil {
 		fmt.Printf("Failed to bind to port %s\n", *PortFlag)
@@ -71,6 +63,13 @@ func main() {
 	}
 
 	fmt.Printf("Listening on addr: %v as %s\n", l.Addr(), Role)
+	// Send Handshake to master if asked for
+	if Role == "slave" {
+		_, err := NewHandshake(ReplicaOFflag, PortFlag)
+		if err != nil {
+			log.Fatalf("Failed to connect to replica: %v", err)
+		}
+	}
 
 	for {
 		conn, err := l.Accept()
@@ -131,7 +130,7 @@ func process(conn net.Conn) {
 				token := psyncWithRDB()
 				encoder.Encode(token)
 
-				c, err := net.Dial("tcp", "localhost:6380")
+				c, err := net.Dial("tcp", fmt.Sprintf("localhost:%s", *PortFlag))
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -151,7 +150,7 @@ func process(conn net.Conn) {
 			propagate()
 			replicaPropagationBuffer = []token{}
 		case "REPLCONF":
-			log.Fatal("REPLCONF")
+			// log.Fatal("REPLCONF")
 			// c, err := net.Dial("tcp", "localhost:6380")
 			// if err != nil {
 			// 	fmt.Println(err)
