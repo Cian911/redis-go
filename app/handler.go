@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -225,6 +226,7 @@ func replconf(args []token) token {
 
 	switch strings.ToLower(args[0].bulk) {
 	case "listening-port":
+		connectToReplica(args[1].bulk)
 		return token{typ: string(STRING), val: "OK"}
 	case "capa":
 		return token{typ: string(STRING), val: "OK"}
@@ -261,4 +263,13 @@ func psyncWithRDB() token {
 			},
 		},
 	}
+}
+
+func connectToReplica(port string) {
+	c, err := net.Dial("tcp", fmt.Sprintf("localhost:%s", port))
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Printf("Adding Replica: %s, %s", c.LocalAddr().String(), port)
+	replicas = append(replicas, c)
 }

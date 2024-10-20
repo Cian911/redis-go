@@ -129,45 +129,22 @@ func process(conn net.Conn) {
 			if strings.Contains(result.val, "FULLRESYNC") {
 				token := psyncWithRDB()
 				encoder.Encode(token)
-
-				c, err := net.Dial("tcp", fmt.Sprintf("localhost:%s", *PortFlag))
-				if err != nil {
-					fmt.Println(err)
-				}
-				replicas = append(replicas, c)
 			}
 		}
 
 		// Add to replication buffer
 		switch command {
 		case "SET":
-			fmt.Println("Setting")
-			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
-			propagate()
-			replicaPropagationBuffer = []token{}
+			fmt.Println("Setting, Role: ", Role)
+			propagate(t)
 		case "DEL":
-			replicaPropagationBuffer = append(replicaPropagationBuffer, t)
-			propagate()
-			replicaPropagationBuffer = []token{}
-		case "REPLCONF":
-			// log.Fatal("REPLCONF")
-			// c, err := net.Dial("tcp", "localhost:6380")
-			// if err != nil {
-			// 	fmt.Println(err)
-			// }
-			// replicas = append(replicas, c)
+			propagate(t)
 		}
 	}
 }
 
-func propagate() {
+func propagate(tok token) {
 	for _, conn := range replicas {
-		if len(replicaPropagationBuffer) == 0 {
-			break
-		}
-
-		for _, t := range replicaPropagationBuffer {
-			PropagateToReplica(conn, t)
-		}
+		PropagateToReplica(conn, tok)
 	}
 }
