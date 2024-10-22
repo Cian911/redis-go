@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 var (
@@ -56,13 +57,6 @@ func main() {
 		defer r.file.Close()
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
-	if err != nil {
-		fmt.Printf("Failed to bind to port %s\n", *PortFlag)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Listening on addr: %v as %s\n", l.Addr(), Role)
 	// Send Handshake to master if asked for
 	if Role == "slave" {
 		_, err := NewHandshake(ReplicaOFflag, PortFlag)
@@ -70,6 +64,15 @@ func main() {
 			log.Fatalf("Failed to connect to replica: %v", err)
 		}
 	}
+
+	time.Sleep(1 * time.Second)
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
+	if err != nil {
+		fmt.Printf("Failed to bind to port %s\n", *PortFlag)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Listening on addr: %v as %s\n", l.Addr(), Role)
 
 	for {
 		conn, err := l.Accept()
@@ -129,6 +132,7 @@ func process(conn net.Conn) {
 			if strings.Contains(result.val, "FULLRESYNC") {
 				token := psyncWithRDB()
 				encoder.Encode(token)
+				fmt.Println("FULLRESYNC: ", conn.LocalAddr().String())
 			}
 		}
 

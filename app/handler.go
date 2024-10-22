@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -266,10 +267,18 @@ func psyncWithRDB() token {
 }
 
 func connectToReplica(port string) {
-	c, err := net.Dial("tcp", fmt.Sprintf("localhost:%s", port))
+	fmt.Println("Connecting to replica...")
+	timeout := 10 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	dialer := net.Dialer{}
+	c, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("localhost:%s", port))
 	if err != nil {
 		fmt.Println(err)
+		return
+	} else {
+		fmt.Printf("Adding Replica: %s, %s", c.LocalAddr().String(), port)
+		replicas = append(replicas, c)
 	}
-	fmt.Printf("Adding Replica: %s, %s", c.LocalAddr().String(), port)
-	replicas = append(replicas, c)
 }
