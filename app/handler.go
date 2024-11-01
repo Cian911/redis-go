@@ -227,7 +227,7 @@ func replconf(args []token) token {
 
 	switch strings.ToLower(args[0].bulk) {
 	case "listening-port":
-		connectToReplica(args[1].bulk)
+		go connectToReplica(args[1].bulk)
 		return token{typ: string(STRING), val: "OK"}
 	case "capa":
 		return token{typ: string(STRING), val: "OK"}
@@ -267,18 +267,29 @@ func psyncWithRDB() token {
 }
 
 func connectToReplica(port string) {
-	fmt.Println("Connecting to replica...")
+	fmt.Println("Connecting to replica on port:", port)
 	timeout := 10 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	dialer := net.Dialer{}
-	c, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("localhost:%s", port))
-	if err != nil {
-		fmt.Println(err)
-		return
-	} else {
-		fmt.Printf("Adding Replica: %s, %s", c.LocalAddr().String(), port)
-		replicas = append(replicas, c)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Timeout reached, connection failed:", ctx.Err())
+			return
+		case <-ticker.C:
+			c, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("localhost:%s", port))
+			if err != nil {
+				fmt.Println("Connection attempt failed:", err)
+				continue // Retry after 1 second if the connection fails
+			}
+			fmt.Printf("Adding Replica: %s, %s\n", c.LocalAddr().String(), port)
+			replicas = append(replicas, c)
+			return // Exit once connected successfully
+		}
 	}
 }

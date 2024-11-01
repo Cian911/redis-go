@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"strconv"
 )
@@ -41,7 +40,6 @@ func (e *Encoder) Decode() ([]byte, error) {
 }
 
 func (t token) Marshal() []byte {
-	fmt.Println(t)
 	switch t.typ {
 	case string(ARRAY):
 		return t.marshalArray()

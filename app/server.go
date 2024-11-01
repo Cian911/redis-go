@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"time"
 )
 
 var (
@@ -35,6 +34,8 @@ func main() {
 	if len(*PortFlag) == 0 {
 		*PortFlag = "6379"
 	}
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
+	fmt.Printf("Listening on addr: %v as %s\n", l.Addr(), Role)
 
 	// Check if slave has been asked for
 	if len(*ReplicaOFflag) == 0 {
@@ -57,22 +58,19 @@ func main() {
 		defer r.file.Close()
 	}
 
+	// time.Sleep(1 * time.Second)
 	// Send Handshake to master if asked for
 	if Role == "slave" {
+		fmt.Println("Starting handshake..: ", *PortFlag)
 		_, err := NewHandshake(ReplicaOFflag, PortFlag)
 		if err != nil {
 			log.Fatalf("Failed to connect to replica: %v", err)
 		}
 	}
-
-	time.Sleep(1 * time.Second)
-	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *PortFlag))
 	if err != nil {
 		fmt.Printf("Failed to bind to port %s\n", *PortFlag)
 		os.Exit(1)
 	}
-
-	fmt.Printf("Listening on addr: %v as %s\n", l.Addr(), Role)
 
 	for {
 		conn, err := l.Accept()
@@ -84,12 +82,12 @@ func main() {
 		if conn != nil {
 			go process(conn)
 		}
-
-		defer conn.Close()
 	}
 }
 
 func process(conn net.Conn) {
+	defer conn.Close()
+
 	for {
 		resp := NewResp(conn)
 		t, err := resp.Read()
@@ -127,22 +125,24 @@ func process(conn net.Conn) {
 
 		// This feels very ugly
 		// TODO: Make this better
-		switch result.typ {
-		case string(STRING):
-			if strings.Contains(result.val, "FULLRESYNC") {
-				token := psyncWithRDB()
-				encoder.Encode(token)
-				fmt.Println("FULLRESYNC: ", conn.LocalAddr().String())
-			}
-		}
+		// switch result.typ {
+		// case string(STRING):
+		// 	if strings.Contains(result.val, "FULLRESYNC") {
+		// 		token := psyncWithRDB()
+		// 		encoder.Encode(token)
+		// 		fmt.Println("FULLRESYNC: ", conn.LocalAddr().String())
+		// 	}
+		// }
 
 		// Add to replication buffer
 		switch command {
 		case "SET":
-			fmt.Println("Setting, Role: ", Role)
+			fmt.Println("Setting, Role: ", t)
 			propagate(t)
 		case "DEL":
 			propagate(t)
+		default:
+			fmt.Println("DEFAULTING: ", command)
 		}
 	}
 }

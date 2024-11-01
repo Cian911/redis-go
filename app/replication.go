@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -141,7 +142,66 @@ func psyncHandshake(conn net.Conn) error {
 		return err
 	}
 
+	// Initialize a RESP parser for structured parsing of responses
+	respParser := NewResp(conn)
+
+	fullResyncCompleted := false
+	defer conn.Close()
+
+	// Continuous loop to handle FULLRESYNC and incoming commands
+	for {
+		parsedToken, err := respParser.Read()
+		// Handle errors explicitly
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Connection closed by peer")
+				break // Exit the loop on EOF
+			}
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				fmt.Println("Read timeout reached, closing connection")
+				break // Exit the loop on timeout
+			}
+			return fmt.Errorf("error decoding after PSYNC: %v", err)
+		}
+
+		// Handle FULLRESYNC and load RDB only once
+		if !fullResyncCompleted && parsedToken.typ == string(STRING) &&
+			strings.HasPrefix(parsedToken.val, "FULLRESYNC") {
+			fmt.Println("Received FULLRESYNC:", parsedToken.val)
+			token := psyncWithRDB()
+			e.Encode(token)
+
+			fullResyncCompleted = true
+
+		} else if parsedToken.typ == string(ARRAY) {
+			// Process the array as a command, e.g., SET commands
+			processCommandArray(parsedToken, conn)
+		}
+	}
+
+	// Close the connection after breaking out of the loop
+	fmt.Println("Exiting psyncHandshake and closing connection")
+	conn.Close()
+
 	return nil
+}
+
+func processCommandArray(response token, conn net.Conn) {
+	command := strings.ToUpper(response.array[0].bulk)
+	args := response.array[1:]
+	fmt.Println("Setting: ", response)
+
+	handler, ok := Handlers[command]
+	if !ok {
+		fmt.Printf("Unhandled command: %s\n", command)
+		return
+	}
+
+	handler(args)
+	fmt.Println(args[0].bulk)
+	if args[0].bulk == "baz" {
+		conn.Close()
+	}
 }
 
 func connect(server, port string) (net.Conn, error) {
