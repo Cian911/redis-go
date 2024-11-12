@@ -26,7 +26,7 @@ func NewHandshake(replicaof *string, replicaPort *string) (net.Conn, error) {
 	replconfHandshakeOne(conn, *replicaPort)
 	replconfHandshakeTwo(conn)
 	psyncHandshake(conn)
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 1)
 
 	go process(conn)
 
@@ -143,18 +143,35 @@ func psyncHandshake(conn net.Conn) error {
 	}
 
 	// Initialize a RESP parser for structured parsing of responses
+	go func() {
+		if err := handleConnection(conn, *e); err != nil {
+			fmt.Println("Error handling connection:", err)
+			// Optionally handle the error (e.g., log it, retry, etc.)
+		}
+	}()
+
+	return nil
+}
+
+func handleConnection(conn net.Conn, e Encoder) error {
 	respParser := NewResp(conn)
-
-	fullResyncCompleted := false
-	defer conn.Close()
-
+	setCmd := false
+	setTok := token{
+		typ:   string(ARRAY),
+		array: []token{},
+	}
 	// Continuous loop to handle FULLRESYNC and incoming commands
 	for {
 		parsedToken, err := respParser.Read()
+		if len(parsedToken.typ) == 0 {
+			conn.Close()
+			break
+		}
+
 		// Handle errors explicitly
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println("Connection closed by peer")
+				fmt.Println("EOF: Connection closed")
 				break // Exit the loop on EOF
 			}
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -164,24 +181,26 @@ func psyncHandshake(conn net.Conn) error {
 			return fmt.Errorf("error decoding after PSYNC: %v", err)
 		}
 
+		if len(setTok.array) == 3 && setCmd == true {
+			processCommandArray(setTok, conn)
+			setCmd = false
+		}
+
 		// Handle FULLRESYNC and load RDB only once
-		if !fullResyncCompleted && parsedToken.typ == string(STRING) &&
+		if parsedToken.typ == string(STRING) &&
 			strings.HasPrefix(parsedToken.val, "FULLRESYNC") {
-			fmt.Println("Received FULLRESYNC:", parsedToken.val)
+			// fmt.Println("Received FULLRESYNC:", parsedToken.val)
 			token := psyncWithRDB()
 			e.Encode(token)
-
-			fullResyncCompleted = true
 
 		} else if parsedToken.typ == string(ARRAY) {
 			// Process the array as a command, e.g., SET commands
 			processCommandArray(parsedToken, conn)
+		} else if parsedToken.typ == string(BULK) && parsedToken.bulk == "SET" || setCmd {
+			setCmd = true
+			setTok.array = append(setTok.array, parsedToken)
 		}
 	}
-
-	// Close the connection after breaking out of the loop
-	fmt.Println("Exiting psyncHandshake and closing connection")
-	conn.Close()
 
 	return nil
 }

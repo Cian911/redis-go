@@ -109,6 +109,10 @@ func process(conn net.Conn) {
 		command := strings.ToUpper(t.array[0].bulk)
 		args := t.array[1:]
 
+		if command == "PSYNC" {
+			replicas = append(replicas, conn)
+		}
+
 		encoder := NewEncoder(conn, conn)
 		handler, ok := Handlers[command]
 
@@ -125,14 +129,14 @@ func process(conn net.Conn) {
 
 		// This feels very ugly
 		// TODO: Make this better
-		// switch result.typ {
-		// case string(STRING):
-		// 	if strings.Contains(result.val, "FULLRESYNC") {
-		// 		token := psyncWithRDB()
-		// 		encoder.Encode(token)
-		// 		fmt.Println("FULLRESYNC: ", conn.LocalAddr().String())
-		// 	}
-		// }
+		switch result.typ {
+		case string(STRING):
+			if strings.Contains(result.val, "FULLRESYNC") {
+				token := psyncWithRDB()
+				encoder.Encode(token)
+				fmt.Println("FULLRESYNC: ", conn.LocalAddr().String())
+			}
+		}
 
 		// Add to replication buffer
 		switch command {
@@ -142,7 +146,6 @@ func process(conn net.Conn) {
 		case "DEL":
 			propagate(t)
 		default:
-			fmt.Println("DEFAULTING: ", command)
 		}
 	}
 }

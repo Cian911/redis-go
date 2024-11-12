@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -204,17 +202,25 @@ func keys(args []token) token {
 }
 
 func info(args []token) token {
+	if len(args) == 0 {
+		return token{typ: string(ERROR), val: "INFO must have an associated value"}
+	}
+
 	switch strings.ToUpper(args[0].bulk) {
 	case "REPLICATION":
-		return token{
+		tok := token{
 			typ: string(STRING),
 			val: fmt.Sprintf(
-				"role:%s\nmaster_replid:%s\nmaster_repl_offset:%d\n",
+				"role:%smaster_replid:%smaster_repl_offset:%d",
 				Role,
 				"8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 				0,
 			),
 		}
+
+		fmt.Println(tok)
+
+		return tok
 	default:
 		return token{}
 	}
@@ -227,7 +233,7 @@ func replconf(args []token) token {
 
 	switch strings.ToLower(args[0].bulk) {
 	case "listening-port":
-		go connectToReplica(args[1].bulk)
+		// go connectToReplica(args[1].bulk)
 		return token{typ: string(STRING), val: "OK"}
 	case "capa":
 		return token{typ: string(STRING), val: "OK"}
@@ -263,33 +269,5 @@ func psyncWithRDB() token {
 				bulk: string(file),
 			},
 		},
-	}
-}
-
-func connectToReplica(port string) {
-	fmt.Println("Connecting to replica on port:", port)
-	timeout := 10 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	dialer := net.Dialer{}
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("Timeout reached, connection failed:", ctx.Err())
-			return
-		case <-ticker.C:
-			c, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("localhost:%s", port))
-			if err != nil {
-				fmt.Println("Connection attempt failed:", err)
-				continue // Retry after 1 second if the connection fails
-			}
-			fmt.Printf("Adding Replica: %s, %s\n", c.LocalAddr().String(), port)
-			replicas = append(replicas, c)
-			return // Exit once connected successfully
-		}
 	}
 }
