@@ -197,7 +197,7 @@ func keys(args []token) token {
 			array: allKeys,
 		}
 	default:
-		return token{}
+		return token{typ: string(ERROR), val: "KEYS error"}
 	}
 }
 
@@ -222,7 +222,7 @@ func info(args []token) token {
 
 		return tok
 	default:
-		return token{}
+		return token{typ: string(ERROR), val: "INFO error"}
 	}
 }
 
@@ -233,12 +233,30 @@ func replconf(args []token) token {
 
 	switch strings.ToLower(args[0].bulk) {
 	case "listening-port":
-		// go connectToReplica(args[1].bulk)
 		return token{typ: string(STRING), val: "OK"}
 	case "capa":
 		return token{typ: string(STRING), val: "OK"}
+	case "getack":
+		return token{
+			typ: string(ARRAY),
+			array: []token{
+				{
+					typ:  string(BULK),
+					bulk: "REPLCONF",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "ACK",
+				},
+				{
+					typ:  string(BULK),
+					bulk: "0",
+				},
+			},
+		}
 	default:
-		return token{}
+		return token{typ: string(ERROR), val: "REPLCONF error"}
+
 	}
 }
 

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,9 +28,8 @@ func NewHandshake(replicaof *string, replicaPort *string) (net.Conn, error) {
 	replconfHandshakeOne(conn, *replicaPort)
 	replconfHandshakeTwo(conn)
 	psyncHandshake(conn)
-	time.Sleep(time.Second * 1)
 
-	go process(conn)
+	go handleMasterConnection(conn)
 
 	return conn, nil
 }
@@ -142,73 +143,125 @@ func psyncHandshake(conn net.Conn) error {
 		return err
 	}
 
-	// Initialize a RESP parser for structured parsing of responses
-	go func() {
-		if err := handleConnection(conn, *e); err != nil {
-			fmt.Println("Error handling connection:", err)
-			// Optionally handle the error (e.g., log it, retry, etc.)
+	return nil
+}
+
+func handleMasterConnection(conn net.Conn) {
+	defer conn.Close()
+	e := NewEncoder(conn, conn)
+	respParser := NewResp(conn)
+
+	for {
+		t, err := respParser.Read()
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Master connection closed")
+				return
+			}
+			fmt.Printf("Error reading from master: %v\n", err)
+			return
 		}
-	}()
+
+		switch t.typ {
+		case string(STRING):
+			if strings.HasPrefix(t.val, "FULLRESYNC") {
+				// Handle FULLRESYNC and receive RDB file
+				err := receiveRDBFile(respParser.reader)
+				if err != nil {
+					fmt.Printf("Error receiving RDB file: %v\n", err)
+					return
+				}
+				// respParser.reader is already synchronized
+			} else {
+				fmt.Printf("Received string from master: %s\n", t.val)
+			}
+
+		case string(ARRAY):
+			// Process commands sent by master
+			processMasterCommand(t.array, *e)
+
+		default:
+			fmt.Printf("Received unexpected type from master: %v\n", t)
+		}
+	}
+}
+
+func receiveRDBFile(reader *bufio.Reader) error {
+	// Read the '$' byte
+	prefix, err := reader.ReadByte()
+	if err != nil {
+		return fmt.Errorf("error reading RDB prefix: %v", err)
+	}
+	if prefix != '$' {
+		return fmt.Errorf("expected '$' prefix for RDB bulk string, got '%c'", prefix)
+	}
+
+	// Read the length line (terminated by \r\n)
+	lengthLine, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("error reading RDB length: %v", err)
+	}
+	if len(lengthLine) < 2 || lengthLine[len(lengthLine)-2] != '\r' {
+		return fmt.Errorf("invalid RDB length line: %v", lengthLine)
+	}
+	lengthStr := lengthLine[:len(lengthLine)-2] // Remove \r\n
+	length, err := strconv.Atoi(lengthStr)
+	if err != nil {
+		return fmt.Errorf("invalid RDB length: %v", err)
+	}
+
+	// Read the RDB content
+	rdbData := make([]byte, length)
+	_, err = io.ReadFull(reader, rdbData)
+	if err != nil {
+		return fmt.Errorf("error reading RDB data: %v", err)
+	}
+
+	fmt.Printf("Received RDB file of length: %d\n", len(rdbData))
+	// You can process rdbData here if needed
 
 	return nil
 }
 
-func handleConnection(conn net.Conn, e Encoder) error {
-	respParser := NewResp(conn)
-	setCmd := false
-	setTok := token{
-		typ:   string(ARRAY),
-		array: []token{},
-	}
-	// Continuous loop to handle FULLRESYNC and incoming commands
-	for {
-		parsedToken, err := respParser.Read()
-		if len(parsedToken.typ) == 0 {
-			conn.Close()
-			break
-		}
-
-		// Handle errors explicitly
-		if err != nil {
-			if err == io.EOF {
-				fmt.Println("EOF: Connection closed")
-				break // Exit the loop on EOF
-			}
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				fmt.Println("Read timeout reached, closing connection")
-				break // Exit the loop on timeout
-			}
-			return fmt.Errorf("error decoding after PSYNC: %v", err)
-		}
-
-		if len(setTok.array) == 3 && setCmd == true {
-			processCommandArray(setTok, conn)
-			setCmd = false
-		}
-
-		// Handle FULLRESYNC and load RDB only once
-		if parsedToken.typ == string(STRING) &&
-			strings.HasPrefix(parsedToken.val, "FULLRESYNC") {
-			// fmt.Println("Received FULLRESYNC:", parsedToken.val)
-			token := psyncWithRDB()
-			e.Encode(token)
-
-		} else if parsedToken.typ == string(ARRAY) {
-			// Process the array as a command, e.g., SET commands
-			processCommandArray(parsedToken, conn)
-		} else if parsedToken.typ == string(BULK) && parsedToken.bulk == "SET" || setCmd {
-			setCmd = true
-			setTok.array = append(setTok.array, parsedToken)
-		}
+func processMasterCommand(args []token, e Encoder) {
+	if len(args) == 0 {
+		return
 	}
 
-	return nil
+	command := strings.ToUpper(args[0].bulk)
+	cmdArgs := args[1:]
+	fmt.Println("COMMAND: ", command)
+
+	if command == "REPLCONF" && len(cmdArgs) >= 1 {
+		subCommand := strings.ToUpper(cmdArgs[0].bulk)
+		if subCommand == "GETACK" {
+			// Respond with REPLCONF ACK 0
+			ackResponse := token{
+				typ: string(ARRAY),
+				array: []token{
+					{typ: string(BULK), bulk: "REPLCONF"},
+					{typ: string(BULK), bulk: "ACK"},
+					{typ: string(BULK), bulk: "0"},
+				},
+			}
+			e.Encode(ackResponse)
+			fmt.Println("Sent REPLCONF ACK 0 to master")
+		}
+	} else {
+		// Process other commands silently
+		handler, ok := Handlers[command]
+		if ok {
+			handler(cmdArgs)
+		} else {
+			fmt.Printf("Unhandled command from master: %s\n", command)
+		}
+	}
 }
 
 func processCommandArray(response token, conn net.Conn) {
 	command := strings.ToUpper(response.array[0].bulk)
 	args := response.array[1:]
-	fmt.Println("Setting: ", response)
+	fmt.Println("COMMAND: ", command)
 
 	handler, ok := Handlers[command]
 	if !ok {

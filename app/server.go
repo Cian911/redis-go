@@ -127,6 +127,20 @@ func process(conn net.Conn) {
 		result := handler(args)
 		encoder.Encode(result)
 
+		// Add to replication buffer
+		if Role == "master" {
+			switch command {
+			case "SET":
+				propagate(t)
+			case "DEL":
+				propagate(t)
+			case "REPLCONF":
+				if t.array[1].bulk == "GETACK" {
+					propagate(t)
+				}
+			}
+		}
+
 		// This feels very ugly
 		// TODO: Make this better
 		switch result.typ {
@@ -138,15 +152,6 @@ func process(conn net.Conn) {
 			}
 		}
 
-		// Add to replication buffer
-		switch command {
-		case "SET":
-			fmt.Println("Setting, Role: ", t)
-			propagate(t)
-		case "DEL":
-			propagate(t)
-		default:
-		}
 	}
 }
 
