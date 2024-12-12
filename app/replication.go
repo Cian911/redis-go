@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-var replicaPropagationBuffer []token
+var bytesWritten int = 0
 
 // NewHandshake connects to master server
 // and performs handshake
@@ -138,7 +138,7 @@ func psyncHandshake(conn net.Conn) error {
 		},
 	}
 	e := NewEncoder(conn, conn)
-	err := e.Encode(tok)
+	_, err := e.Encode(tok)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func handleMasterConnection(conn net.Conn) {
 
 		case string(ARRAY):
 			// Process commands sent by master
-			processMasterCommand(t.array, *e)
+			processMasterCommand(t.array, *e, t)
 
 		default:
 			fmt.Printf("Received unexpected type from master: %v\n", t)
@@ -223,14 +223,14 @@ func receiveRDBFile(reader *bufio.Reader) error {
 	return nil
 }
 
-func processMasterCommand(args []token, e Encoder) {
+func processMasterCommand(args []token, e Encoder, t token) {
 	if len(args) == 0 {
 		return
 	}
 
 	command := strings.ToUpper(args[0].bulk)
 	cmdArgs := args[1:]
-	fmt.Println("COMMAND: ", command)
+	fmt.Println(args[0])
 
 	if command == "REPLCONF" && len(cmdArgs) >= 1 {
 		subCommand := strings.ToUpper(cmdArgs[0].bulk)
@@ -241,38 +241,21 @@ func processMasterCommand(args []token, e Encoder) {
 				array: []token{
 					{typ: string(BULK), bulk: "REPLCONF"},
 					{typ: string(BULK), bulk: "ACK"},
-					{typ: string(BULK), bulk: "0"},
+					{typ: string(BULK), bulk: fmt.Sprintf("%d", bytesWritten)},
 				},
 			}
+			bytesWritten += TokenLength(t)
 			e.Encode(ackResponse)
-			fmt.Println("Sent REPLCONF ACK 0 to master")
 		}
 	} else {
 		// Process other commands silently
 		handler, ok := Handlers[command]
 		if ok {
 			handler(cmdArgs)
+			bytesWritten += TokenLength(t)
 		} else {
 			fmt.Printf("Unhandled command from master: %s\n", command)
 		}
-	}
-}
-
-func processCommandArray(response token, conn net.Conn) {
-	command := strings.ToUpper(response.array[0].bulk)
-	args := response.array[1:]
-	fmt.Println("COMMAND: ", command)
-
-	handler, ok := Handlers[command]
-	if !ok {
-		fmt.Printf("Unhandled command: %s\n", command)
-		return
-	}
-
-	handler(args)
-	fmt.Println(args[0].bulk)
-	if args[0].bulk == "baz" {
-		conn.Close()
 	}
 }
 

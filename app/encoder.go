@@ -17,15 +17,15 @@ func NewEncoder(en io.Writer, rd io.ReadCloser) *Encoder {
 	}
 }
 
-func (e *Encoder) Encode(t token) error {
+func (e *Encoder) Encode(t token) (int, error) {
 	bytes := t.Marshal()
 
 	_, err := e.writer.Write(bytes)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return len(bytes), nil
 }
 
 func (e *Encoder) Decode() ([]byte, error) {
@@ -58,6 +58,11 @@ func (t token) Marshal() []byte {
 	default:
 		return []byte{}
 	}
+}
+
+func TokenLength(t token) int {
+	bytes := t.Marshal()
+	return len(bytes)
 }
 
 func (t token) marshalArray() []byte {
