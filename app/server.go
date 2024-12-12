@@ -107,6 +107,7 @@ func process(conn net.Conn) {
 		}
 
 		command := strings.ToUpper(t.array[0].bulk)
+		fmt.Println("MAIN COMMAND: ", command)
 		args := t.array[1:]
 
 		if command == "PSYNC" {

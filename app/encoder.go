@@ -55,6 +55,8 @@ func (t token) Marshal() []byte {
 		return t.marshalNull()
 	case string(SYNC):
 		return t.marshalPsync()
+	case string(INTEGER):
+		return t.marshalInt()
 	default:
 		return []byte{}
 	}
@@ -138,6 +140,15 @@ func (t token) marshalPsync() []byte {
 	bytes = append(bytes, t.array[0].bulk...)
 	bytes = append(bytes, '\r', '\n')
 	bytes = append(bytes, t.array[1].bulk...)
+
+	return bytes
+}
+
+func (t token) marshalInt() []byte {
+	var bytes []byte
+	bytes = append(bytes, ':')
+	bytes = append(bytes, t.val...)
+	bytes = append(bytes, '\r', '\n')
 
 	return bytes
 }

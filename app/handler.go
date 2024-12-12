@@ -18,6 +18,7 @@ var Handlers = map[string]func([]token) token{
 	"INFO":     info,
 	"REPLCONF": replconf,
 	"PSYNC":    psync,
+	"WAIT":     wait,
 }
 
 var (
@@ -288,4 +289,8 @@ func psyncWithRDB() token {
 			},
 		},
 	}
+}
+
+func wait(args []token) token {
+	return token{typ: string(INTEGER), val: "0"}
 }
