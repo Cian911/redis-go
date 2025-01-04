@@ -292,5 +292,5 @@ func psyncWithRDB() token {
 }
 
 func wait(args []token) token {
-	return token{typ: string(INTEGER), val: "0"}
+	return token{typ: string(INTEGER), val: fmt.Sprintf("%d", len(replicas))}
 }

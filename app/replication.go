@@ -230,7 +230,6 @@ func processMasterCommand(args []token, e Encoder, t token) {
 
 	command := strings.ToUpper(args[0].bulk)
 	cmdArgs := args[1:]
-	fmt.Println(args[0])
 
 	if command == "REPLCONF" && len(cmdArgs) >= 1 {
 		subCommand := strings.ToUpper(cmdArgs[0].bulk)
