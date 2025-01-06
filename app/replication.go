@@ -234,7 +234,7 @@ func processMasterCommand(args []token, e Encoder, t token) {
 	if command == "REPLCONF" && len(cmdArgs) >= 1 {
 		subCommand := strings.ToUpper(cmdArgs[0].bulk)
 		if subCommand == "GETACK" {
-			// Respond with REPLCONF ACK 0
+			// Respond with REPLCONF ACK with bytes written
 			ackResponse := token{
 				typ: string(ARRAY),
 				array: []token{

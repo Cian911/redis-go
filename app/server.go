@@ -19,6 +19,11 @@ var (
 
 var replicas []net.Conn
 
+type Replicas struct {
+	conn         net.Conn
+	bytesWritten int
+}
+
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
@@ -132,6 +137,8 @@ func process(conn net.Conn) {
 		if Role == "master" {
 			switch command {
 			case "SET":
+				// Keep track of bytes written for master
+				bytesWritten += TokenLength(t)
 				propagate(t)
 			case "DEL":
 				propagate(t)
@@ -139,6 +146,18 @@ func process(conn net.Conn) {
 				if t.array[1].bulk == "GETACK" {
 					propagate(t)
 				}
+				// case "WAIT":
+				// 	getAckToken := token{
+				// 		typ: string(ARRAY),
+				// 		array: []token{
+				// 			{typ: string(BULK), bulk: "REPLCONF"},
+				// 			{typ: string(BULK), bulk: "GETACK"},
+				// 			{typ: string(BULK), bulk: "*"},
+				// 		},
+				// 	}
+				// 	propagate(getAckToken)
+				// 	response, _ := encoder.Decode()
+				// 	fmt.Printf("WAIT RESPONSE: %s\n", string(response))
 			}
 		}
 

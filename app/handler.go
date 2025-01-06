@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -292,5 +293,76 @@ func psyncWithRDB() token {
 }
 
 func wait(args []token) token {
-	return token{typ: string(INTEGER), val: fmt.Sprintf("%d", len(replicas))}
+	if len(args) < 2 {
+		return token{typ: string(ERROR), val: "WAIT takes min 2 arguments."}
+	}
+
+	minReplicas, err := strconv.ParseInt(args[0].bulk, 10, 64)
+	if err != nil {
+		return token{typ: string(ERROR), val: "Could not parse WAIT replica number"}
+	}
+
+	timeout, err := strconv.ParseInt(args[1].bulk, 10, 64)
+	if err != nil {
+		return token{typ: string(ERROR), val: "Could not parse WAIT timeout"}
+	}
+
+	fmt.Printf("WAIT: replicas: %d, timeout: %d\n", minReplicas, timeout)
+
+	// Make a channel so each goroutine can signal it has received an ACK
+	ackReceived := make(chan bool, len(replicas))
+
+	// Send REPLCONF GETACK to each replica
+	for i := 0; i < len(replicas); i++ {
+		go func(conn net.Conn) {
+			// Write the GETACK request
+			getAckToken := token{
+				typ: string(ARRAY),
+				array: []token{
+					{typ: string(BULK), bulk: "REPLCONF"},
+					{typ: string(BULK), bulk: "GETACK"},
+					{typ: string(BULK), bulk: "*"},
+				},
+			}
+			if _, err := conn.Write(getAckToken.marshalArray()); err != nil {
+				fmt.Printf("Could not write to replica for WAIT: %v\n", err)
+				return
+			}
+
+			// Now read the response. Even though real Redis WAIT checks
+			// for `REPLCONF ACK <offset>`, your test harness is only verifying
+			// that you block until a “response” comes in from the replica.
+			// If you want to parse it, do so here.
+			buffer := make([]byte, 1024)
+			_, err := conn.Read(buffer)
+			if err != nil {
+				fmt.Printf("Error reading from replica: %v\n", err)
+				return
+			}
+			fmt.Printf("Got a response from replica: %v\n", string(buffer[0:]))
+
+			// If we got any kind of data, treat it as an ACK
+			ackReceived <- true
+		}(replicas[i])
+	}
+
+	// Wait for minReplicas or time out
+	timer := time.NewTimer(time.Duration(timeout) * time.Millisecond)
+	acks := 1
+	fmt.Printf("ACKS received: %d\n", ackReceived)
+
+	for {
+		select {
+		case <-ackReceived:
+			fmt.Println("ACKS +1")
+			acks++
+			if acks >= int(minReplicas) {
+				timer.Stop()
+				return token{typ: string(INTEGER), val: fmt.Sprintf("%d", acks)}
+			}
+		case <-timer.C:
+			// Timed out, return how many we have so far
+			return token{typ: string(INTEGER), val: fmt.Sprintf("%d", acks)}
+		}
+	}
 }
