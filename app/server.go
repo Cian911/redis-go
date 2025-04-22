@@ -15,6 +15,8 @@ var (
 	PortFlag      *string
 	ReplicaOFflag *string
 	Role          string
+
+	waitACKCh chan struct{}
 )
 
 var replicas []net.Conn
@@ -145,6 +147,16 @@ func process(conn net.Conn) {
 			case "REPLCONF":
 				if t.array[1].bulk == "GETACK" {
 					propagate(t)
+				}
+				if t.array[1].bulk == "ACK" {
+					if waitACKCh != nil {
+						select {
+						case waitACKCh <- struct{}{}:
+						default:
+						}
+					}
+					// don't echo anything back to the replica
+					continue
 				}
 				// case "WAIT":
 				// 	getAckToken := token{
