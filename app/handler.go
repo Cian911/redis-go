@@ -19,6 +19,7 @@ var Handlers = map[string]func([]token) token{
 	"REPLCONF": replconf,
 	"PSYNC":    psync,
 	"WAIT":     wait,
+	"TYPE":     typ,
 }
 
 var (
@@ -340,5 +341,23 @@ func wait(args []token) token {
 		case <-timer.C:
 			return token{typ: string(INTEGER), val: fmt.Sprintf("%d", acks)}
 		}
+	}
+}
+
+// Returns the string representation of the type of value stored at key.
+// Supports: string, list, set, zset, hash, stream, vectorset
+func typ(args []token) token {
+	if len(args) < 1 {
+		return token{typ: string(ERROR), val: "TYPE must take a key as arugment."}
+	}
+	mux.RLock()
+	t := datastore[args[0].bulk]
+	mux.RUnlock()
+
+	switch len(t.value) {
+	case 0:
+		return token{typ: string(STRING), val: "none"}
+	default:
+		return token{typ: string(STRING), val: "string"}
 	}
 }
