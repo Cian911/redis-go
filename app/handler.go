@@ -20,6 +20,7 @@ var Handlers = map[string]func([]token) token{
 	"PSYNC":    psync,
 	"WAIT":     wait,
 	"TYPE":     typ,
+	"XADD":     xadd,
 }
 
 var (
@@ -31,9 +32,17 @@ var (
 )
 
 type object struct {
-	value     string
-	createdAt time.Time
-	expiry    int // In Milliseconds
+	value      string
+	createdAt  time.Time
+	expiry     int            // In Milliseconds
+	typ        string         // Type of entry (string, set, stream)
+	streamData []streamObject // Only used when typ is 'stream'
+}
+
+type streamObject struct {
+	id    string
+	key   string
+	value string
 }
 
 func echo(args []token) token {
@@ -66,6 +75,7 @@ func set(args []token) token {
 		datastore[args[0].bulk] = object{
 			value:     args[1].bulk,
 			createdAt: time.Now().UTC(),
+			typ:       "string",
 		}
 		mux.Unlock()
 	}
@@ -350,14 +360,71 @@ func typ(args []token) token {
 	if len(args) < 1 {
 		return token{typ: string(ERROR), val: "TYPE must take a key as arugment."}
 	}
+
 	mux.RLock()
 	t := datastore[args[0].bulk]
 	mux.RUnlock()
 
-	switch len(t.value) {
-	case 0:
+	switch t.typ {
+	case "":
 		return token{typ: string(STRING), val: "none"}
+	case "string":
+		return token{typ: string(STRING), val: "string"}
+	case "stream":
+		return token{typ: string(STRING), val: "stream"}
 	default:
 		return token{typ: string(STRING), val: "string"}
 	}
+}
+
+// XADD stream_key 1526919030474-0 temperature 36 humidity 95
+func xadd(args []token) token {
+	if len(args) < 4 {
+		return token{typ: string(ERROR), val: "XADD needs and stream key and a key/value pair."}
+	}
+
+	if len(args[2:])%2 != 0 {
+		return token{
+			typ: string(ERROR),
+			val: "XADD needs and stream key and an even key/value pair.",
+		}
+	}
+	// Check for existing stream key
+	mux.RLock()
+	t := datastore[args[0].bulk]
+	mux.RUnlock()
+
+	if t.typ == "stream" {
+		for i := 0; i < len(args[2:]); i += 2 {
+			so := streamObject{
+				id:    args[1].bulk,
+				key:   args[i].bulk,
+				value: args[i+2].bulk,
+			}
+			t.streamData = append(t.streamData, so)
+		}
+	}
+
+	// If none, create it
+	obj := object{
+		value:      "",
+		createdAt:  time.Now().UTC(),
+		typ:        "stream", // Type of entry (string, set, stream)
+		streamData: []streamObject{},
+	}
+
+	for i := 0; i < len(args[2:]); i += 2 {
+		so := streamObject{
+			id:    args[1].bulk,
+			key:   args[i].bulk,
+			value: args[i+2].bulk,
+		}
+		obj.streamData = append(obj.streamData, so)
+	}
+
+	mux.Lock()
+	datastore[args[0].bulk] = obj
+	mux.Unlock()
+
+	return token{typ: string(STRING), val: obj.streamData[len(obj.streamData)-1].id}
 }
