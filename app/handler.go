@@ -34,9 +34,9 @@ var (
 type object struct {
 	value      string
 	createdAt  time.Time
-	expiry     int            // In Milliseconds
-	typ        string         // Type of entry (string, set, stream)
-	streamData []streamObject // Only used when typ is 'stream'
+	expiry     int                     // In Milliseconds
+	typ        string                  // Type of entry (string, set, stream)
+	streamData map[string]streamObject // Only used when typ is 'stream'
 }
 
 type streamObject struct {
@@ -378,53 +378,77 @@ func typ(args []token) token {
 }
 
 // XADD stream_key 1526919030474-0 temperature 36 humidity 95
+
 func xadd(args []token) token {
 	if len(args) < 4 {
-		return token{typ: string(ERROR), val: "XADD needs and stream key and a key/value pair."}
+		return token{typ: string(ERROR), val: "XADD needs a stream key and a key/value pair."}
 	}
 
 	if len(args[2:])%2 != 0 {
-		return token{
-			typ: string(ERROR),
-			val: "XADD needs and stream key and an even key/value pair.",
-		}
-	}
-	// Check for existing stream key
-	mux.RLock()
-	t := datastore[args[0].bulk]
-	mux.RUnlock()
-
-	if t.typ == "stream" {
-		for i := 0; i < len(args[2:]); i += 2 {
-			so := streamObject{
-				id:    args[1].bulk,
-				key:   args[i].bulk,
-				value: args[i+2].bulk,
-			}
-			t.streamData = append(t.streamData, so)
-		}
+		return token{typ: string(ERROR), val: "XADD key/value pairs must be even."}
 	}
 
-	// If none, create it
-	obj := object{
-		value:      "",
-		createdAt:  time.Now().UTC(),
-		typ:        "stream", // Type of entry (string, set, stream)
-		streamData: []streamObject{},
-	}
-
-	for i := 0; i < len(args[2:]); i += 2 {
-		so := streamObject{
-			id:    args[1].bulk,
-			key:   args[i].bulk,
-			value: args[i+2].bulk,
-		}
-		obj.streamData = append(obj.streamData, so)
-	}
+	fmt.Println(args[0].bulk)
+	streamKey := args[0].bulk
+	entryID := args[1].bulk
 
 	mux.Lock()
-	datastore[args[0].bulk] = obj
-	mux.Unlock()
+	defer mux.Unlock()
 
-	return token{typ: string(STRING), val: obj.streamData[len(obj.streamData)-1].id}
+	t, exists := datastore[streamKey]
+
+	// If the stream doesn't exist, create it
+	if !exists || t.typ != "stream" {
+		t = object{
+			typ:        "stream",
+			createdAt:  time.Now().UTC(),
+			streamData: make(map[string]streamObject),
+		}
+	} else if t.streamData == nil {
+		t.streamData = make(map[string]streamObject)
+	}
+
+	// Check for duplicate ID
+	if _, ok := t.streamData[entryID]; ok {
+		return token{
+			typ: string(ERROR),
+			val: "ERR The ID specified in XADD is equal or smaller than the target stream top item",
+		}
+	}
+
+	if exists {
+		existingKeys := GetMapKeys(t.streamData)
+		sequenceID := ConvertSeqID(SplitXAddSequenceID(entryID))
+		sequenceIDLastKey := ConvertSeqID(SplitXAddSequenceID(existingKeys[len(existingKeys)-1]))
+
+		if sequenceID == ConvertSeqID([]string{"0", "0"}) {
+			return token{
+				typ: string(ERROR),
+				val: "ERR The ID specified in XADD must be greater than 0-0",
+			}
+		}
+
+		if sequenceID <= sequenceIDLastKey {
+			return token{
+				typ: string(ERROR),
+				val: "ERR The ID specified in XADD is equal or smaller than the target stream top item",
+			}
+		}
+	}
+
+	// Add entries to the stream
+	for i := 2; i < len(args); i += 2 {
+		field := args[i].bulk
+		value := args[i+1].bulk
+		t.streamData[entryID] = streamObject{
+			id:    entryID,
+			key:   field,
+			value: value,
+		}
+	}
+
+	// Save back to datastore
+	datastore[streamKey] = t
+
+	return token{typ: string(STRING), val: entryID}
 }
